@@ -18,17 +18,24 @@ for (let i = 0; i < songs.length; i++) {
 }
 
 console.log("\n🎵 Select a number to play the song:");
+console.log("⏸️ Press p to pause");
 
 process.stdin.setEncoding("utf-8");
 
 process.stdin.on("data", (input) => {
-  const userInput = Number(input.trim());
+  const userInput = input.trim();
 
-  player(userInput);
+  // Pause song
+  if (userInput === "p") {
+    pauseSong();
+    return;
+  }
+
+  // Play song
+  player(Number(userInput));
 });
 
 function player(userInput) {
-  // Check song number
   if (userInput < 1 || userInput > songs.length) {
     console.log("❌ Invalid song number");
     return;
@@ -43,10 +50,23 @@ function player(userInput) {
     childProcess.kill();
   }
 
-  // Play song using ffplay
+  // Play song
   childProcess = spawn("ffplay", [
     "-nodisp",
+    "-vn",
     "-autoexit",
+    "-loglevel",
+    "quiet",
     `./songs/${song}`,
   ]);
+}
+
+function pauseSong() {
+  if (childProcess) {
+    childProcess.stdin.write(" ");
+    console.log("⏸️ Song paused");
+  } else {
+    console.log("❌ No song is playing");
+  }
+  childProcess.kill();
 }
