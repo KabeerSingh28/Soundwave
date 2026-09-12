@@ -1,72 +1,223 @@
-const { spawn } = require("child_process");
 const fs = require("fs");
+const { spawn } = require("node:child_process");
 
-const path = "./songs";
+// ==============================
+// MILESTONE 1: READ SONGS
+// ==============================
 
-let childProcess = null;
+const songsPath = "./songs";
 
-// Get all mp3 files
 const songs = fs
-  .readdirSync(path)
-  .filter((song) => song.endsWith(".mp3"));
+    .readdirSync(songsPath)
+    .filter((file) => file.endsWith(".mp3"));
 
-console.log("🎶 Welcome to the Songs App 🎶\n");
-
-// Show songs
-for (let i = 0; i < songs.length; i++) {
-  console.log(`${i + 1}: ${songs[i].split(".")[0]}`);
+if (songs.length === 0) {
+    console.log("No MP3 files found in the songs folder.");
+    process.exit(0);
 }
 
-console.log("\n🎵 Select a number to play the song:");
-console.log("⏸️ Press p to pause");
 
-process.stdin.setEncoding("utf-8");
+// ==============================
+// MILESTONE 3: STATE
+// ==============================
 
-process.stdin.on("data", (input) => {
-  const userInput = input.trim();
+let selectedIndex = 0;
 
-  // Pause song
-  if (userInput === "p") {
-    pauseSong();
-    return;
-  }
 
-  // Play song
-  player(Number(userInput));
+// ==============================
+// MILESTONE 4 & 5: PLAYER STATE
+// ==============================
+
+let currentProcess = null;
+let isPaused = false;
+
+
+// ==============================
+// DISPLAY PLAYLIST
+// ==============================
+
+function displaySongs() {
+
+    process.stdout.write("\x1b[2J");
+    process.stdout.write("\x1b[H");
+
+    console.log("🎵 TERMINAL MUSIC PLAYER\n");
+
+    for (let i = 0; i < songs.length; i++) {
+
+        if (i === selectedIndex) {
+            console.log(`▶ ${songs[i].replace(".mp3", "")}`);
+        } else {
+            console.log(`  ${songs[i].replace(".mp3", "")}`);
+        }
+    }
+
+    console.log("\n↑ ↓ Navigate");
+    console.log("ENTER Play");
+    console.log("SPACE Pause/Resume");
+    console.log("N Next");
+    console.log("P Previous");
+    console.log("S Stop");
+    console.log("Q Quit");
+}
+
+
+// ==============================
+// MILESTONE 4: PLAY SONG
+// ==============================
+
+function playSong() {
+
+    // Stop currently playing song
+    if (currentProcess) {
+        currentProcess.kill("SIGTERM");
+    }
+
+    const songPath = `${songsPath}/${songs[selectedIndex]}`;
+
+    currentProcess = spawn("afplay", [songPath]);
+
+    isPaused = false;
+
+    console.log(`\n▶ Now Playing: ${songs[selectedIndex].replace(".mp3", "")}`);
+
+    currentProcess.on("close", () => {
+        currentProcess = null;
+        isPaused = false;
+    });
+}
+
+
+// ==============================
+// INITIAL DISPLAY
+// ==============================
+
+displaySongs();
+
+
+// ==============================
+// MILESTONE 2: KEYBOARD INPUT
+// ==============================
+
+process.stdin.setRawMode(true);
+process.stdin.setEncoding("utf8");
+
+process.stdin.on("data", (key) => {
+
+
+    // ==========================
+    // MILESTONE 3: MOVE UP
+    // ==========================
+
+    if (key === "\x1b[A") {
+
+        if (selectedIndex > 0) {
+            selectedIndex--;
+            displaySongs();
+        }
+    }
+
+
+    // ==========================
+    // MILESTONE 3: MOVE DOWN
+    // ==========================
+
+    if (key === "\x1b[B") {
+
+        if (selectedIndex < songs.length - 1) {
+            selectedIndex++;
+            displaySongs();
+        }
+    }
+
+
+    // ==========================
+    // MILESTONE 4: ENTER
+    // ==========================
+
+    if (key === "\r") {
+        playSong();
+    }
+
+
+    // ==========================
+    // MILESTONE 5: PAUSE / RESUME
+    // ==========================
+
+    if (key === " ") {
+
+        if (currentProcess) {
+
+            if (isPaused === false) {
+                currentProcess.kill("SIGSTOP");
+                isPaused = true;
+            } else {
+                currentProcess.kill("SIGCONT");
+                isPaused = false;
+            }
+
+        }
+    }
+
+
+    // ==========================
+    // MILESTONE 5: STOP
+    // ==========================
+
+    if (key === "s") {
+
+        if (currentProcess) {
+            currentProcess.kill("SIGTERM");
+            currentProcess = null;
+            isPaused = false;
+        }
+    }
+
+
+    // ==========================
+    // MILESTONE 6: NEXT
+    // ==========================
+
+    if (key === "n") {
+
+        if (selectedIndex < songs.length - 1) {
+
+            selectedIndex++;
+
+            displaySongs();
+
+            playSong();
+        }
+    }
+
+
+    // ==========================
+    // MILESTONE 6: PREVIOUS
+    // ==========================
+
+    if (key === "p") {
+
+        if (selectedIndex > 0) {
+
+            selectedIndex--;
+
+            displaySongs();
+
+            playSong();
+        }
+    }
+
+
+    // ==========================
+    // QUIT
+    // ==========================
+
+    if (key === "q") {
+
+        if (currentProcess) {
+            currentProcess.kill("SIGTERM");
+        }
+
+        process.exit(0);
+    }
 });
-
-function player(userInput) {
-  if (userInput < 1 || userInput > songs.length) {
-    console.log("❌ Invalid song number");
-    return;
-  }
-
-  const song = songs[userInput - 1];
-
-  console.log(`🎵 Playing: ${song}`);
-
-  // Stop previous song
-  if (childProcess) {
-    childProcess.kill();
-  }
-
-  // Play song
-  childProcess = spawn("ffplay", [
-    "-nodisp",
-    "-vn",
-    "-autoexit",
-    "-loglevel",
-    "quiet",
-    `./songs/${song}`,
-  ]);
-}
-
-function pauseSong() {
-  if (childProcess) {
-    childProcess.stdin.write(" ");
-    console.log("⏸️ Song paused");
-  } else {
-    console.log("❌ No song is playing");
-  }
-  childProcess.kill();
-}
