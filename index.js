@@ -9,6 +9,7 @@ const songs = fs
   .filter((song) => song.toLowerCase().endsWith(".mp3"));
 
 let playerProcess = null;
+let isPaused = false;
 
 if (songs.length === 0) {
   console.log("No MP3 files found in the songs folder.");
@@ -24,6 +25,7 @@ function showMenu() {
 
   console.log("\nCommands:");
   console.log("[number] → Select and play a song");
+  console.log("p → Pause / Resume");
 }
 
 function playSong(songNumber) {
@@ -39,6 +41,8 @@ function playSong(songNumber) {
     playerProcess.kill("SIGTERM");
   }
 
+  isPaused = false;
+
   console.log(`🎵 Playing: ${path.parse(song).name}`);
 
   playerProcess = spawn(
@@ -52,9 +56,31 @@ function playSong(songNumber) {
     playerProcess = null;
   });
 
-  playerProcess.on("exit", () => {
-    playerProcess = null;
+  const startedProcess = playerProcess;
+
+  startedProcess.on("exit", () => {
+    if (playerProcess === startedProcess) {
+      playerProcess = null;
+      isPaused = false;
+    }
   });
+}
+
+function pauseOrResumeSong() {
+  if (!playerProcess) {
+    console.log("No song is playing.");
+    return;
+  }
+
+  if (isPaused) {
+    playerProcess.kill("SIGCONT");
+    isPaused = false;
+    console.log("▶️ Song resumed");
+  } else {
+    playerProcess.kill("SIGSTOP");
+    isPaused = true;
+    console.log("⏸️ Song paused");
+  }
 }
 
 showMenu();
@@ -65,5 +91,12 @@ const input = readline.createInterface({
 });
 
 input.on("line", (answer) => {
-  playSong(Number(answer.trim()));
+  const command = answer.trim().toLowerCase();
+
+  if (command === "p") {
+    pauseOrResumeSong();
+    return;
+  }
+
+  playSong(Number(command));
 });
