@@ -28,6 +28,7 @@ function showMenu() {
   console.log("[number] → Select and play a song");
   console.log("p → Pause / Resume");
   console.log("n → Next song");
+  console.log("b → Previous song");
 }
 
 function stopCurrentSong() {
@@ -105,6 +106,16 @@ function playNextSong() {
   playSong(nextIndex + 1);
 }
 
+function playPreviousSong() {
+  if (currentSongIndex === null) {
+    console.log("Select a song first.");
+    return;
+  }
+
+  const previousIndex = (currentSongIndex - 1 + songs.length) % songs.length;
+  playSong(previousIndex + 1);
+}
+
 showMenu();
 
 const input = readline.createInterface({
@@ -122,6 +133,11 @@ input.on("line", (answer) => {
 
   if (command === "n") {
     playNextSong();
+    return;
+  }
+
+  if (command === "b") {
+    playPreviousSong();
     return;
   }
 
