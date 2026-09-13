@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const net = require("net");
 const readline = require("readline");
 const { spawn } = require("child_process");
 
@@ -12,6 +14,7 @@ let playerProcess = null;
 let isPaused = false;
 let currentSongIndex = null;
 let isQuitting = false;
+let playerSocket = null;
 
 if (songs.length === 0) {
   console.log("No MP3 files found in the songs folder.");
@@ -38,12 +41,53 @@ function stopCurrentSong() {
     return;
   }
 
-  if (isPaused) {
-    playerProcess.kill("SIGCONT");
-  }
-
   playerProcess.kill("SIGTERM");
   isPaused = false;
+}
+
+function sendMpvCommand(command, onSuccess, attemptsLeft = 10) {
+  if (!playerSocket) {
+    console.log("No song is playing.");
+    return;
+  }
+
+  const socket = net.createConnection(playerSocket);
+  let finished = false;
+
+  socket.on("connect", () => {
+    socket.write(`${JSON.stringify({ command })}\n`);
+  });
+
+  socket.on("data", (data) => {
+    if (finished) {
+      return;
+    }
+
+    const response = JSON.parse(data.toString());
+    finished = true;
+    socket.end();
+
+    if (response.error === "success") {
+      onSuccess();
+    } else {
+      console.log("Could not control mpv.");
+    }
+  });
+
+  socket.on("error", () => {
+    if (finished) {
+      return;
+    }
+
+    finished = true;
+    socket.destroy();
+
+    if (attemptsLeft > 0) {
+      setTimeout(() => sendMpvCommand(command, onSuccess, attemptsLeft - 1), 100);
+    } else {
+      console.log("Could not connect to mpv.");
+    }
+  });
 }
 
 function playSong(songNumber) {
@@ -57,26 +101,38 @@ function playSong(songNumber) {
 
   stopCurrentSong();
   currentSongIndex = songNumber - 1;
+  playerSocket = path.join(os.tmpdir(), `soundwave-mpv-${process.pid}-${Date.now()}.sock`);
+
+  if (fs.existsSync(playerSocket)) {
+    fs.unlinkSync(playerSocket);
+  }
 
   console.log(`🎵 Playing: ${path.parse(song).name}`);
 
   playerProcess = spawn(
-    "ffplay",
-    ["-nodisp", "-vn", "-autoexit", "-loglevel", "error", songPath],
+    "mpv",
+    ["--no-video", "--really-quiet", "--no-terminal", `--input-ipc-server=${playerSocket}`, songPath],
     { stdio: ["ignore", "inherit", "inherit"] }
   );
 
   playerProcess.on("error", () => {
-    console.log("Could not start ffplay. Make sure ffplay is installed.");
+    console.log("Could not start mpv. Install it with: brew install mpv");
     playerProcess = null;
+    playerSocket = null;
   });
 
   const startedProcess = playerProcess;
+  const startedSocket = playerSocket;
 
   startedProcess.on("exit", () => {
     if (playerProcess === startedProcess) {
       playerProcess = null;
       isPaused = false;
+      playerSocket = null;
+    }
+
+    if (fs.existsSync(startedSocket)) {
+      fs.unlinkSync(startedSocket);
     }
   });
 }
@@ -87,15 +143,10 @@ function pauseOrResumeSong() {
     return;
   }
 
-  if (isPaused) {
-    playerProcess.kill("SIGCONT");
-    isPaused = false;
-    console.log("▶️ Song resumed");
-  } else {
-    playerProcess.kill("SIGSTOP");
-    isPaused = true;
-    console.log("⏸️ Song paused");
-  }
+  sendMpvCommand(["cycle", "pause"], () => {
+    isPaused = !isPaused;
+    console.log(isPaused ? "⏸️ Song paused" : "▶️ Song resumed");
+  });
 }
 
 function playNextSong() {
