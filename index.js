@@ -11,6 +11,7 @@ const songs = fs
 let playerProcess = null;
 let isPaused = false;
 let currentSongIndex = null;
+let isQuitting = false;
 
 if (songs.length === 0) {
   console.log("No MP3 files found in the songs folder.");
@@ -29,6 +30,7 @@ function showMenu() {
   console.log("p → Pause / Resume");
   console.log("n → Next song");
   console.log("b → Previous song");
+  console.log("q → Quit");
 }
 
 function stopCurrentSong() {
@@ -116,6 +118,27 @@ function playPreviousSong() {
   playSong(previousIndex + 1);
 }
 
+function quitPlayer() {
+  if (isQuitting) {
+    return;
+  }
+
+  isQuitting = true;
+  console.log("Thanks for using Soundwave!");
+  input.close();
+
+  if (!playerProcess) {
+    process.exit(0);
+  }
+
+  const processToStop = playerProcess;
+  processToStop.once("exit", () => process.exit(0));
+  stopCurrentSong();
+
+  // Do not leave Node open if ffplay does not respond to SIGTERM.
+  setTimeout(() => process.exit(0), 1000).unref();
+}
+
 showMenu();
 
 const input = readline.createInterface({
@@ -141,5 +164,12 @@ input.on("line", (answer) => {
     return;
   }
 
+  if (command === "q") {
+    quitPlayer();
+    return;
+  }
+
   playSong(Number(command));
 });
+
+process.on("SIGINT", quitPlayer);
