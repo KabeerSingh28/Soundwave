@@ -10,6 +10,7 @@ const songs = fs
 
 let playerProcess = null;
 let isPaused = false;
+let currentSongIndex = null;
 
 if (songs.length === 0) {
   console.log("No MP3 files found in the songs folder.");
@@ -26,6 +27,20 @@ function showMenu() {
   console.log("\nCommands:");
   console.log("[number] → Select and play a song");
   console.log("p → Pause / Resume");
+  console.log("n → Next song");
+}
+
+function stopCurrentSong() {
+  if (!playerProcess) {
+    return;
+  }
+
+  if (isPaused) {
+    playerProcess.kill("SIGCONT");
+  }
+
+  playerProcess.kill("SIGTERM");
+  isPaused = false;
 }
 
 function playSong(songNumber) {
@@ -37,11 +52,8 @@ function playSong(songNumber) {
   const song = songs[songNumber - 1];
   const songPath = path.join(songsFolder, song);
 
-  if (playerProcess) {
-    playerProcess.kill("SIGTERM");
-  }
-
-  isPaused = false;
+  stopCurrentSong();
+  currentSongIndex = songNumber - 1;
 
   console.log(`🎵 Playing: ${path.parse(song).name}`);
 
@@ -83,6 +95,16 @@ function pauseOrResumeSong() {
   }
 }
 
+function playNextSong() {
+  if (currentSongIndex === null) {
+    console.log("Select a song first.");
+    return;
+  }
+
+  const nextIndex = (currentSongIndex + 1) % songs.length;
+  playSong(nextIndex + 1);
+}
+
 showMenu();
 
 const input = readline.createInterface({
@@ -95,6 +117,11 @@ input.on("line", (answer) => {
 
   if (command === "p") {
     pauseOrResumeSong();
+    return;
+  }
+
+  if (command === "n") {
+    playNextSong();
     return;
   }
 
